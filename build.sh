@@ -47,9 +47,12 @@ build() {
     local arch=$2
     local gcc_arch=$3
     
-    cmake -DTARGET_ARCH=$arch-w64-mingw32 $gcc_arch -DALWAYS_REMOVE_BUILDFILES=ON -DSINGLE_SOURCE_LOCATION=$srcdir -DRUSTUP_LOCATION=$buildroot/install_rustup -G Ninja -H$gitdir -B$buildroot/build$bit
+    cmake -DTARGET_ARCH=$arch-w64-mingw32 -DGCC_ARCH=skylake -DALWAYS_REMOVE_BUILDFILES=ON -DSINGLE_SOURCE_LOCATION=$srcdir -DRUSTUP_LOCATION=$buildroot/install_rustup -G Ninja -H$gitdir -B$buildroot/build$bit
     ninja -C $buildroot/build$bit libzvbi-removeprefix || true
     ninja -C $buildroot/build$bit download || true
+    export CFLAGS="-O3 -DNDEBUG -fcf-protection=full -fstack-clash-protection -mprefer-vector-width=256 -mshstk -ffat-lto-objects -pipe"
+    export CXXFLAGS="$CFLAGS -flto"
+    export LDFLAGS="$CFLAGS -flto -fuse-linker-plugin -Wl,-O3,--build-id=none"
     if [[ ! "$(ls -A $buildroot/build$bit/install/bin)" ]]; then
         ninja -C $buildroot/build$bit gcc
     elif [[ ! "$(ls -A $buildroot/install_rustup/.cargo/bin)" ]]; then
@@ -58,6 +61,10 @@ build() {
     fi
     ninja -C $buildroot/build$bit update
     ninja -C $buildroot/build$bit mpv-fullclean
+    export CFLAGS="-O3 -march=skylake -fcf-protection=full -fstack-clash-protection -mprefer-vector-width=256 -fvisibility=hidden -Wa,-muse-unaligned-vector-move -DNDEBUG -DWIN32_WINNT=0x0A00"
+    export CXXFLAGS="$CFLAGS"
+    export LDFLAGS="$CFLAGS -Wl,--build-id=none,-O3,--exclude-libs,ALL"
+    export RUSTFLAGS="-C opt-level=3 -C target-cpu=skylake -C strip=symbols"
     ninja -C $buildroot/build$bit mpv
 
     if [ -d $buildroot/build$bit/mpv-$arch* ] ; then
@@ -66,7 +73,7 @@ build() {
         echo "Failed compiled $bit-bit. Stop"
         exit 1
     fi
-    
+    cp $buildroot/build$bit/install/$arch-w64-mingw32/bin/libva*.dll $buildroot/build$bit/mpv-$arch*/
     ninja -C $buildroot/build$bit cargo-clean
 }
 
